@@ -1,4 +1,5 @@
 #include "flowtrack.h"
+#include "netsentry.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -128,4 +129,64 @@ static void advance_buckets(flow_entry_t *e, time_t now) {
   }
 
   e->last_bucket_time = now;
+}
+
+void flowtrack_update(flow_table_t *ft, const packet_info_t *pkt) {
+  flow_entry_t *e = lookup_entry(ft, pkt->src_ip, /*create_if_missing=*/1);
+  if (!e)
+    return; /* allocation failed - drop the update rather than crash */
+
+  advance_buckets(e, pkt->ts.tv_sec);
+
+  time_bucket_t *cur = &e->buckets[e->current_index];
+  cur->packets++;
+  cur->bytes += pkt->length;
+
+  if (pkt->proto == PROTO_TCP && pkt->tcp_syn && !pkt->tcp_ack) {
+    cur->syn_count++;
+  }
+}
+
+int flowtrack_get(flow_table_t *ft, struct in_addr ip, flow_stats_t *out) {
+  flow_entry_t *e = lookup_entry(ft, ip, /*create_if_missing=*/0);
+  if (!e)
+    return -1; /*never seen this host */
+
+  /* Bring it up to date first - without this, a host that sent a
+   * burst 90 seconds ago and then went silent would still report
+   * that old burst's totals as if they happened "just now". */
+  advance_buckets(e, time(NULL));
+
+  memset(out, 0, sizeof(*out));
+  out->ip = ip;
+  for (int i = 0; i < e->bucket_count; i++) {
+    out->packets += e->buckets[i].packets;
+    out->bytes += e->buckets[i].bytes;
+    out->syn_count += e->buckets[i].syn_count;
+  }
+  return 0;
+}
+
+void flowtract_tick(flow_table_t *ft) {
+  time_t now = time(NULL);
+  for (int i = 0; i < HASH_BUCKETS; i++) {
+    for (flow_entry_t *e = ft->slots[i]; e != NULL; e = e->next) {
+      advance_buckets(e, now);
+    }
+  }
+}
+
+void flowtrack_destroy(flow_table_t *ft) {
+  if (!ft)
+    return;
+  for (int i = 0; i < HASH_BUCKETS; i++) {
+    flow_entry_t *e = ft->slots[i];
+    while (e) {
+      flow_entry_t *next = e->next;
+      free(e->buckets);
+      free(e);
+      e = next;
+    }
+  }
+  free(ft);
 }
