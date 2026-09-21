@@ -167,7 +167,7 @@ int flowtrack_get(flow_table_t *ft, struct in_addr ip, flow_stats_t *out) {
   return 0;
 }
 
-void flowtract_tick(flow_table_t *ft) {
+void flowtrack_tick(flow_table_t *ft) {
   time_t now = time(NULL);
   for (int i = 0; i < HASH_BUCKETS; i++) {
     for (flow_entry_t *e = ft->slots[i]; e != NULL; e = e->next) {

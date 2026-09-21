@@ -42,7 +42,7 @@ int flowtrack_get(flow_table_t *ft, struct in_addr ip, flow_stats_t *out);
 /* Call one per second from main's loop. Ages every entry's buckets
  * forward even if that host hasn't sent a packet recently, so a
  * burst from 90 seconds ago doesn't linger in the window forever. */
-void flowtract_tick(flow_table_t *ft);
+void flowtrack_tick(flow_table_t *ft);
 
 void flowtrack_destroy(flow_table_t *ft);
 
