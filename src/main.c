@@ -1,4 +1,5 @@
 #include "capture.h"
+#include "detect.h"
 #include "flowtrack.h"
 #include "netsentry.h"
 
@@ -9,6 +10,14 @@
 #include <stdlib.h>
 
 #define WINDOW_SECS 60
+
+/* Everything the packet and tick callbacks need to share, bundled so
+ * it can travel through capture_run's single void* user_ctx. */
+typedef struct {
+  flow_table_t *ft;
+  detector_t *detector;
+  int secs_until_detect; /* counts down; 0 means "run detect_run now" */
+} app_ctx_t;
 
 /*
  * Step 1: capture module only.
@@ -31,7 +40,7 @@ static const char *proto_name(l4_proto_t p) {
   }
 }
 
-static void on_packet(void *ctx, const packet_info_t *pkt) {
+static void on_packet(void *ctx_v, const packet_info_t *pkt) {
   // (void)ctx;
   // char src[INET_ADDRSTRLEN], dst[INET_ADDRSTRLEN];
   // inet_ntop(AF_INET, &pkt->src_ip, src, sizeof(src));
@@ -46,12 +55,12 @@ static void on_packet(void *ctx, const packet_info_t *pkt) {
   //
   // printf("\n");
 
-  flow_table_t *ft = (flow_table_t *)ctx;
+  app_ctx_t *ctx = (app_ctx_t *)ctx_v;
 
-  flowtrack_update(ft, pkt);
+  flowtrack_update(ctx->ft, pkt);
 
   flow_stats_t stats;
-  flowtrack_get(ft, pkt->src_ip,
+  flowtrack_get(ctx->ft, pkt->src_ip,
                 &stats); /* just updated it, so this can't fail */
 
   char src[INET_ADDRSTRLEN], dst[INET_ADDRSTRLEN];
@@ -69,7 +78,30 @@ static void on_packet(void *ctx, const packet_info_t *pkt) {
          (unsigned long long)stats.syn_count);
 }
 
-static void on_tick(void *ctx) { flowtrack_tick((flow_table_t *)ctx); }
+/* Called by detect_run whenever a host crosses the sensitivity
+ * threshold. For now this just prints - control. will hook in here
+ * later to actually block the offending host via nftables. */
+static void on_anomaly(void *ctx_v, const anomaly_t *a) {
+  (void)ctx_v;
+  char ip[INET_ADDRSTRLEN];
+  inet_ntop(AF_INET, &a->ip, ip, sizeof(ip));
+
+  printf(
+      "\n*** NOMALY %-15s rate=%.1f pkt/s baseline=%.1f+-%.1f z=%.2f ***\n\n",
+      ip, a->packets_per_sec, a->baseline_mean, a->baseline_stddev, a->z_score);
+}
+
+static void on_tick(void *ctx_v) {
+  app_ctx_t *ctx = (app_ctx_t *)ctx_v;
+
+  flowtrack_tick(ctx->ft); /* age idle hosts even if nobody queried them */
+
+  ctx->secs_until_detect--;
+  if (ctx->secs_until_detect <= 0) {
+    detect_run(ctx->detector, ctx->ft, on_anomaly, ctx);
+    ctx->secs_until_detect = WINDOW_SECS;
+  }
+}
 
 static void handle_sigint(int signum) {
   (void)signum;
@@ -95,19 +127,28 @@ int main(int argc, char **argv) {
     return EXIT_FAILURE;
   }
 
-  flow_table_t *ft = flowtrack_create(WINDOW_SECS);
-  if (!ft) {
-    fprintf(stderr, "flowtrack_create failed\n");
+  app_ctx_t ctx = {0};
+  ctx.ft = flowtrack_create(WINDOW_SECS);
+  ctx.detector = detect_create(SENS_MEDIUM, WINDOW_SECS);
+  ctx.secs_until_detect = WINDOW_SECS;
+
+  if (!ctx.ft || !ctx.detector) {
+    fprintf(stderr, "failed to initialize flow table / detector\n");
     capture_close();
     return EXIT_FAILURE;
   }
 
   signal(SIGINT, handle_sigint);
 
-  printf("NetSentry capture running on '%s' — press Ctrl+C to stop\n", iface);
-  int rc = capture_run(on_packet, on_tick, NULL);
+  printf("NetSentry capture running on '%s' - press Ctrl+C to stop\n", iface);
+  printf("(baseline detection runs every %ds; the first pass just learns, "
+         "nothing is flagged yet)\n",
+         WINDOW_SECS);
 
-  flowtrack_destroy(ft);
+  int rc = capture_run(on_packet, on_tick, &ctx);
+
+  detect_destroy(ctx.detector);
+  flowtrack_destroy(ctx.ft);
   capture_close();
   printf("\ncapture stopped.\n");
   return rc == 0 ? EXIT_SUCCESS : EXIT_FAILURE;

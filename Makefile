@@ -1,6 +1,6 @@
 CC       := gcc
 CFLAGS   := -Wall -Wextra -std=gnu11 -g -Isrc
-LDLIBS   := -lpcap
+LDLIBS   := -lpcap -lm
 
 SRC_DIR  := src
 BUILD_DIR:= build

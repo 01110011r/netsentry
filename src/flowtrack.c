@@ -147,6 +147,17 @@ void flowtrack_update(flow_table_t *ft, const packet_info_t *pkt) {
   }
 }
 
+static flow_stats_t sum_buckets(flow_entry_t *e, flow_stats_t *out) {
+  memset(out, 0, sizeof(*out));
+  out->ip = e->ip;
+  for (int i = 0; i < e->bucket_count; i++) {
+    out->packets += e->buckets[i].packets;
+    out->bytes += e->buckets[i].bytes;
+    out->syn_count += e->buckets[i].syn_count;
+  }
+  return *out;
+}
+
 int flowtrack_get(flow_table_t *ft, struct in_addr ip, flow_stats_t *out) {
   flow_entry_t *e = lookup_entry(ft, ip, /*create_if_missing=*/0);
   if (!e)
@@ -157,13 +168,16 @@ int flowtrack_get(flow_table_t *ft, struct in_addr ip, flow_stats_t *out) {
    * that old burst's totals as if they happened "just now". */
   advance_buckets(e, time(NULL));
 
-  memset(out, 0, sizeof(*out));
-  out->ip = ip;
-  for (int i = 0; i < e->bucket_count; i++) {
-    out->packets += e->buckets[i].packets;
-    out->bytes += e->buckets[i].bytes;
-    out->syn_count += e->buckets[i].syn_count;
-  }
+  // memset(out, 0, sizeof(*out));
+  // out->ip = ip;
+  // for (int i = 0; i < e->bucket_count; i++) {
+  //   out->packets += e->buckets[i].packets;
+  //   out->bytes += e->buckets[i].bytes;
+  //   out->syn_count += e->buckets[i].syn_count;
+  // }
+
+  sum_buckets(e, out);
+
   return 0;
 }
 
@@ -172,6 +186,28 @@ void flowtrack_tick(flow_table_t *ft) {
   for (int i = 0; i < HASH_BUCKETS; i++) {
     for (flow_entry_t *e = ft->slots[i]; e != NULL; e = e->next) {
       advance_buckets(e, now);
+    }
+  }
+}
+
+void flowtrack_foreach(flow_table_t *ft, flow_visit_fn visit, void *user_ctx) {
+  time_t now = time(NULL);
+
+  for (int i = 0; i < HASH_BUCKETS; i++) {
+    for (flow_entry_t *e = ft->slots[i]; e != NULL; e = e->next) {
+      advance_buckets(e, now); /* bring this host's window up to date first */
+
+      flow_stats_t stats = {0};
+      // stats.ip = e->ip;
+      // for (int b = 0; b < e->bucket_count; b++) {
+      //   stats.packets += e->buckets[b].packets;
+      //   stats.bytes += e->buckets[b].bytes;
+      //   stats.syn_count += e->buckets[b].syn_count;
+      // }
+
+      sum_buckets(e, &stats);
+
+      visit(user_ctx, e->ip, &stats);
     }
   }
 }

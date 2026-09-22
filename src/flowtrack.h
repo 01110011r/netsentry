@@ -39,6 +39,15 @@ void flowtrack_update(flow_table_t *ft, const packet_info_t *pkt);
  * Returns 0 on success, -1 if we have no entry for that IP. */
 int flowtrack_get(flow_table_t *ft, struct in_addr ip, flow_stats_t *out);
 
+/* Callback invoked once per tracked host by flowtrack_foreach(). */
+typedef void (*flow_visit_fn)(void *user_ctx, struct in_addr ip,
+                              const flow_stats_t *stats);
+
+/* Visit every host currently in the table, calling `visit` with its
+ * current (freshly aged-forward) stats. Order is unspecified - it
+ * follows the hash table's internal layout, not insertion order. */
+void flowtrack_foreach(flow_table_t *ft, flow_visit_fn visit, void *user_ctx);
+
 /* Call one per second from main's loop. Ages every entry's buckets
  * forward even if that host hasn't sent a packet recently, so a
  * burst from 90 seconds ago doesn't linger in the window forever. */
