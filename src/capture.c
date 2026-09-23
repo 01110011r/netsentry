@@ -147,9 +147,24 @@ int capture_run(packet_handler_fn on_packet, tick_handler_fn on_tick,
     }
 
     time_t now = time(NULL);
-    if (on_tick && now != last_tick) {
+    printf("[capture_run] pcap_dispatch returned %d packets; now=%ld "
+           "last_tick=%ld\n",
+           rc, (long)now, (long)last_tick);
+    // if (on_tick && now != last_tick) {
+    //   on_tick(user_ctx);
+    //   last_tick = now;
+    // }
+    /* A `while`, not on `if`: if pcap_dispatch blocked for several
+     * real seconds (Linux/libpcap's capture timeout is advisory, not
+     * guaranteed - a quiet interface can sit far longer than the
+     * 1000mx we asked for), we must fire on_tick once per second that
+     * actually elapsed, not once regardless of gap size. Otherwise a
+     * 31-second idle gap silently decrements secs_until_detect by
+     * only 1 instead of 31, and detect_run drifts out of sync with
+     * real time.*/
+    while (on_tick && last_tick < now) {
+      last_tick++;
       on_tick(user_ctx);
-      last_tick = now;
     }
   }
   return 0;

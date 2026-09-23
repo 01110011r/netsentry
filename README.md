@@ -75,6 +75,6 @@ src/
 
 - [x] Packet capture + parsing (Ethernet/IPv4/TCP/UDP/ICMP)
 - [x] Per-host sliding-window stats (packets, bytes, SYN count)
-- [ ] Anomaly detection (baseline + threshold, `detect.c`)
+- [x] Anomaly detection (baseline + threshold, `detect.c`)
 - [ ] Active response via nftables (`control.c`)
 - [ ] Alert/report output for the dashboard prototype

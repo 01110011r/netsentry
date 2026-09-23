@@ -1,6 +1,7 @@
 #include "flowtrack.h"
 #include "netsentry.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -191,6 +192,7 @@ void flowtrack_tick(flow_table_t *ft) {
 }
 
 void flowtrack_foreach(flow_table_t *ft, flow_visit_fn visit, void *user_ctx) {
+  printf("[flowtrack_foreach] called");
   time_t now = time(NULL);
 
   for (int i = 0; i < HASH_BUCKETS; i++) {

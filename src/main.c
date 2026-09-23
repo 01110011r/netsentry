@@ -87,11 +87,13 @@ static void on_anomaly(void *ctx_v, const anomaly_t *a) {
   inet_ntop(AF_INET, &a->ip, ip, sizeof(ip));
 
   printf(
-      "\n*** NOMALY %-15s rate=%.1f pkt/s baseline=%.1f+-%.1f z=%.2f ***\n\n",
+      "\n*** ANOMALY %-15s rate=%.1f pkt/s baseline=%.1f+-%.1f z=%.2f ***\n\n",
       ip, a->packets_per_sec, a->baseline_mean, a->baseline_stddev, a->z_score);
 }
 
 static void on_tick(void *ctx_v) {
+  printf("[tick] %d seconds until next detect_run\n",
+         ((app_ctx_t *)ctx_v)->secs_until_detect);
   app_ctx_t *ctx = (app_ctx_t *)ctx_v;
 
   flowtrack_tick(ctx->ft); /* age idle hosts even if nobody queried them */
