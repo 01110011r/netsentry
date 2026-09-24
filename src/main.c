@@ -1,4 +1,5 @@
 #include "capture.h"
+#include "control.h"
 #include "detect.h"
 #include "flowtrack.h"
 #include "netsentry.h"
@@ -89,6 +90,9 @@ static void on_anomaly(void *ctx_v, const anomaly_t *a) {
   printf(
       "\n*** ANOMALY %-15s rate=%.1f pkt/s baseline=%.1f+-%.1f z=%.2f ***\n\n",
       ip, a->packets_per_sec, a->baseline_mean, a->baseline_stddev, a->z_score);
+
+  // [control] block the offending host for 60 seconds
+  control_block(a->ip, 60); /* block for 60 seconds */
 }
 
 static void on_tick(void *ctx_v) {
@@ -129,6 +133,12 @@ int main(int argc, char **argv) {
     return EXIT_FAILURE;
   }
 
+  if (control_init() != 0) {
+    fprintf(stderr, "control_init failed (are you root?)\n");
+    capture_close();
+    return EXIT_FAILURE;
+  }
+
   app_ctx_t ctx = {0};
   ctx.ft = flowtrack_create(WINDOW_SECS);
   ctx.detector = detect_create(SENS_MEDIUM, WINDOW_SECS);
@@ -136,6 +146,7 @@ int main(int argc, char **argv) {
 
   if (!ctx.ft || !ctx.detector) {
     fprintf(stderr, "failed to initialize flow table / detector\n");
+    control_teardown();
     capture_close();
     return EXIT_FAILURE;
   }
@@ -151,6 +162,7 @@ int main(int argc, char **argv) {
 
   detect_destroy(ctx.detector);
   flowtrack_destroy(ctx.ft);
+  control_teardown();
   capture_close();
   printf("\ncapture stopped.\n");
   return rc == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
