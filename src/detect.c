@@ -116,6 +116,8 @@ static void visit_host(void *ctx_v, struct in_addr ip,
   printf("[detect] %-15s rate=%.1f mean=%.1f stddev=%.1f z=%.2f\n", dbg_ip,
          rate, e->mean, stddev, z);
 
+  printf("[visit_host] sample_count=%d z=%f threshold=%.1f\n", e->sample_count,
+         z, threshold_for(d->sensitivity));
   if (e->sample_count >= MIN_SAMPLES_BEFORE_ALERTING &&
       z > threshold_for(d->sensitivity)) {
     anomaly_t a = {.ip = ip,
