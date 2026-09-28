@@ -9,6 +9,7 @@ offending hosts via nftables.
 
 ```sh
 make            # builds ./netsentry
+make debug      # builds ./netsentry with debug symbols (verbose logging)
 make clean      # removes build/ and the binary
 ```
 
@@ -76,5 +77,5 @@ src/
 - [x] Packet capture + parsing (Ethernet/IPv4/TCP/UDP/ICMP)
 - [x] Per-host sliding-window stats (packets, bytes, SYN count)
 - [x] Anomaly detection (baseline + threshold, `detect.c`)
-- [ ] Active response via nftables (`control.c`)
-- [ ] Alert/report output for the dashboard prototype
+- [x] Active response via nftables (`control.c`)
+- [x] Alert/report output for the dashboard prototype

@@ -21,6 +21,7 @@ typedef struct {
   double baseline_mean;
   double baseline_stddev;
   double z_score; /* how many stddevs above baseline */
+  int is_new;     /* 1=first alert of this epsode, 0=ongoing */
 } anomaly_t;
 
 typedef void (*anomaly_handler_fn)(void *user_ctx, const anomaly_t *a);

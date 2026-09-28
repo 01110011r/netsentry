@@ -1,8 +1,8 @@
 #ifndef NETSENTRY_H
 #define NETSENTRY_H
 
-#include <stdint.h>
 #include <netinet/in.h>
+#include <stdint.h>
 #include <time.h>
 
 /*
@@ -15,24 +15,26 @@
  *   Everything happens synchronously inside the pcap callback.
  */
 
-typedef enum {
-    PROTO_OTHER = 0,
-    PROTO_TCP,
-    PROTO_UDP,
-    PROTO_ICMP
-} l4_proto_t;
+typedef enum { PROTO_OTHER = 0, PROTO_TCP, PROTO_UDP, PROTO_ICMP } l4_proto_t;
 
 /* One parsed packet, filled in by capture.c and consumed by flowtrack.c */
 typedef struct {
-    struct timeval ts;      /* capture timestamp */
-    struct in_addr src_ip;
-    struct in_addr dst_ip;
-    uint16_t       src_port;   /* 0 if not TCP/UDP */
-    uint16_t       dst_port;   /* 0 if not TCP/UDP */
-    l4_proto_t     proto;
-    uint32_t       length;     /* on-wire length, incl. headers */
-    uint8_t        tcp_syn;    /* 1 if TCP SYN flag set (no ACK) */
-    uint8_t        tcp_ack;    /* 1 if TCP ACK flag set */
+  struct timeval ts; /* capture timestamp */
+  struct in_addr src_ip;
+  struct in_addr dst_ip;
+  uint16_t src_port; /* 0 if not TCP/UDP */
+  uint16_t dst_port; /* 0 if not TCP/UDP */
+  l4_proto_t proto;
+  uint32_t length; /* on-wire length, incl. headers */
+  uint8_t tcp_syn; /* 1 if TCP SYN flag set (no ACK) */
+  uint8_t tcp_ack; /* 1 if TCP ACK flag set */
 } packet_info_t;
 
 #endif /* NETSENTRY_H */
+
+#ifdef DEBUG
+#include <stdio.h>
+#define DBG(...) fprintf(stderr, __VA_ARGS__)
+#else
+#define DBG(...) ((void)0)
+#endif

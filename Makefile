@@ -9,7 +9,8 @@ BIN      := netsentry
 SRCS     := $(wildcard $(SRC_DIR)/*.c)
 OBJS     := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS))
 
-.PHONY: all clean run
+.DEFAULT_GOAL := all
+.PHONY: all clean run debug
 
 all: $(BIN)
 
@@ -21,6 +22,9 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
+
+debug: CFLAGS += -DDEBUG
+debug: clean all
 
 # Live capture needs raw socket access -> run with sudo, or grant the
 # binary CAP_NET_RAW/CAP_NET_ADMIN with setcap instead of using sudo:

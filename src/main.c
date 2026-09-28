@@ -3,6 +3,7 @@
 #include "detect.h"
 #include "flowtrack.h"
 #include "netsentry.h"
+#include "report.h"
 
 #include <arpa/inet.h>
 #include <pcap.h>
@@ -28,6 +29,7 @@ typedef struct {
  * on_packet() is the seam where the flow tracker will plug in next.
  */
 
+#ifdef DEBUG
 static const char *proto_name(l4_proto_t p) {
   switch (p) {
   case PROTO_TCP:
@@ -40,6 +42,7 @@ static const char *proto_name(l4_proto_t p) {
     return "OTHER";
   }
 }
+#endif
 
 static void on_packet(void *ctx_v, const packet_info_t *pkt) {
   // (void)ctx;
@@ -60,6 +63,7 @@ static void on_packet(void *ctx_v, const packet_info_t *pkt) {
 
   flowtrack_update(ctx->ft, pkt);
 
+#ifdef DEBUG
   flow_stats_t stats;
   flowtrack_get(ctx->ft, pkt->src_ip,
                 &stats); /* just updated it, so this can't fail */
@@ -77,6 +81,7 @@ static void on_packet(void *ctx_v, const packet_info_t *pkt) {
   printf("  | %s last %ds: pkts=%llu bytes=%llu syn=%llu\n", src, WINDOW_SECS,
          (unsigned long long)stats.packets, (unsigned long long)stats.bytes,
          (unsigned long long)stats.syn_count);
+#endif
 }
 
 /* Called by detect_run whenever a host crosses the sensitivity
@@ -84,20 +89,27 @@ static void on_packet(void *ctx_v, const packet_info_t *pkt) {
  * later to actually block the offending host via nftables. */
 static void on_anomaly(void *ctx_v, const anomaly_t *a) {
   (void)ctx_v;
-  char ip[INET_ADDRSTRLEN];
-  inet_ntop(AF_INET, &a->ip, ip, sizeof(ip));
 
-  printf(
-      "\n*** ANOMALY %-15s rate=%.1f pkt/s baseline=%.1f+-%.1f z=%.2f ***\n\n",
-      ip, a->packets_per_sec, a->baseline_mean, a->baseline_stddev, a->z_score);
+  if (a->is_new) {
+    char ip[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET, &a->ip, ip, sizeof(ip));
 
+    printf("\n*** ANOMALY %-15s rate=%.1f pkt/s baseline=%.1f+-%.1f z=%.2f "
+           "***\n\n",
+           ip, a->packets_per_sec, a->baseline_mean, a->baseline_stddev,
+           a->z_score);
+
+    report_alert(a);
+  }
   // [control] block the offending host for 60 seconds
-  control_block(a->ip, 60); /* block for 60 seconds */
+  if (control_block(a->ip, WINDOW_SECS) == 0 && a->is_new) {
+    report_block(a->ip, WINDOW_SECS);
+  }
 }
 
 static void on_tick(void *ctx_v) {
-  printf("[tick] %d seconds until next detect_run\n",
-         ((app_ctx_t *)ctx_v)->secs_until_detect);
+  DBG("[tick] %d seconds until next detect_run\n",
+      ((app_ctx_t *)ctx_v)->secs_until_detect);
   app_ctx_t *ctx = (app_ctx_t *)ctx_v;
 
   flowtrack_tick(ctx->ft); /* age idle hosts even if nobody queried them */
@@ -139,6 +151,15 @@ int main(int argc, char **argv) {
     return EXIT_FAILURE;
   }
 
+  const char REPORT_FILE[] = "/tmp/netsentry_report.json";
+  if (report_init(REPORT_FILE) != 0) {
+    fprintf(stderr, "report_init failed\n");
+    control_teardown();
+    capture_close();
+
+    return EXIT_FAILURE;
+  }
+
   app_ctx_t ctx = {0};
   ctx.ft = flowtrack_create(WINDOW_SECS);
   ctx.detector = detect_create(SENS_MEDIUM, WINDOW_SECS);
@@ -160,6 +181,7 @@ int main(int argc, char **argv) {
 
   int rc = capture_run(on_packet, on_tick, &ctx);
 
+  report_close();
   detect_destroy(ctx.detector);
   flowtrack_destroy(ctx.ft);
   control_teardown();

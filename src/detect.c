@@ -11,6 +11,7 @@
 #define HASH_BUCKETS 1024
 #define ALPHA 0.2 /* EWMA smoothing factor: how ast the baseline adapts */
 #define MIN_SAMPLES_BEFORE_ALERTING 5
+#define MIN_ALERT_RATE 10.0
 
 /* One host's learned "normal" behavior, updated a little on every
  * sample (EWMA = exponentially weighted moving average) rather than
@@ -22,6 +23,7 @@ typedef struct baseline_entry {
   int sample_count; /* how many samples we've folded in */
   double mean;      /* running average packets/sec */
   double var;       /* running variance estimate */
+  int alerting;     /* 1=we're currently alerting on this host, 0=not */
   struct baseline_entry *next;
 } baseline_entry_t;
 
@@ -79,10 +81,9 @@ typedef struct {
 
 static void visit_host(void *ctx_v, struct in_addr ip,
                        const flow_stats_t *stats) {
-  printf("[detect] visit_host: ip=%s packets=%llu bytes=%llu syn=%llu\n",
-         inet_ntoa(ip), (unsigned long long)stats->packets,
-         (unsigned long long)stats->bytes,
-         (unsigned long long)stats->syn_count);
+  DBG("[detect] visit_host: ip=%s packets=%llu bytes=%llu syn=%llu\n",
+      inet_ntoa(ip), (unsigned long long)stats->packets,
+      (unsigned long long)stats->bytes, (unsigned long long)stats->syn_count);
   run_ctx_t *ctx = (run_ctx_t *)ctx_v;
   detector_t *d = ctx->d;
 
@@ -113,24 +114,29 @@ static void visit_host(void *ctx_v, struct in_addr ip,
   // debugging
   char dbg_ip[INET_ADDRSTRLEN];
   inet_ntop(AF_INET, &ip, dbg_ip, sizeof(dbg_ip));
-  printf("[detect] %-15s rate=%.1f mean=%.1f stddev=%.1f z=%.2f\n", dbg_ip,
-         rate, e->mean, stddev, z);
+  DBG("[detect] %-15s rate=%.1f mean=%.1f stddev=%.1f z=%.2f\n", dbg_ip, rate,
+      e->mean, stddev, z);
 
-  printf("[visit_host] sample_count=%d z=%f threshold=%.1f\n", e->sample_count,
-         z, threshold_for(d->sensitivity));
-  if (e->sample_count >= MIN_SAMPLES_BEFORE_ALERTING &&
-      z > threshold_for(d->sensitivity)) {
+  DBG("[visit_host] sample_count=%d z=%f threshold=%.1f\n", e->sample_count, z,
+      threshold_for(d->sensitivity));
+
+  int breach = e->sample_count >= MIN_SAMPLES_BEFORE_ALERTING &&
+               rate >= MIN_ALERT_RATE && z > threshold_for(d->sensitivity);
+  if (breach) {
     anomaly_t a = {.ip = ip,
                    .packets_per_sec = rate,
                    .baseline_mean = e->mean,
                    .baseline_stddev = stddev,
-                   .z_score = z};
+                   .z_score = z,
+                   .is_new = !e->alerting};
+    e->alerting = 1;
     ctx->on_anomaly(ctx->user_ctx, &a);
   }
 
   /* Update the baseline AFTER comparing this sample agaisnt it -
    * otherwise a spike would immediately drag its own mean/stddev
    * upward and could mask itself before on_anomaly ever fires. */
+  e->alerting = 0;
   double delta = rate - e->mean;
   e->mean += ALPHA * delta;
   e->var = (1.0 - ALPHA) * (e->var + ALPHA * delta * delta);
@@ -150,8 +156,8 @@ detector_t *detect_create(sensitivity_t sensitivity, int window_secs) {
 void detect_run(detector_t *d, flow_table_t *ft, anomaly_handler_fn on_anomaly,
                 void *user_ctx) {
   run_ctx_t ctx = {.d = d, .on_anomaly = on_anomaly, .user_ctx = user_ctx};
-  printf("[detect_run] run: sensitivity=%d window_secs=%d\n", d->sensitivity,
-         d->window_secs);
+  DBG("[detect_run] run: sensitivity=%d window_secs=%d\n", d->sensitivity,
+      d->window_secs);
   flowtrack_foreach(ft, visit_host, &ctx);
 }
 
