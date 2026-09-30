@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NetSentry — IoT Network Security Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F3F5F8;
+    --panel:#FFFFFF;
+    --panel-alt:#EEF1F6;
+    --border:#D8DEE9;
+    --text:#1A2233;
+    --text-muted:#5B6478;
+    --accent:#0E7C86;
+    --accent-soft:#0E7C8622;
+    --safe:#1E8E5A;
+    --safe-soft:#1E8E5A1a;
+    --warn:#B8720A;
+    --warn-soft:#B8720A1a;
+    --critical:#C0392B;
+    --critical-soft:#C0392B1a;
+    --grid-line:#00000012;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0B1220;
+      --panel:#121B2E;
+      --panel-alt:#17213A;
+      --border:#23304A;
+      --text:#E7ECF5;
+      --text-muted:#8B97AF;
+      --accent:#3BC9DB;
+      --accent-soft:#3BC9DB22;
+      --safe:#4CAF6D;
+      --safe-soft:#4CAF6D22;
+      --warn:#F5A623;
+      --warn-soft:#F5A62322;
+      --critical:#E5484D;
+      --critical-soft:#E5484D22;
+      --grid-line:#ffffff10;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0B1220;
+    --panel:#121B2E;
+    --panel-alt:#17213A;
+    --border:#23304A;
+    --text:#E7ECF5;
+    --text-muted:#8B97AF;
+    --accent:#3BC9DB;
+    --accent-soft:#3BC9DB22;
+    --safe:#4CAF6D;
+    --safe-soft:#4CAF6D22;
+    --warn:#F5A623;
+    --warn-soft:#F5A62322;
+    --critical:#E5484D;
+    --critical-soft:#E5484D22;
+    --grid-line:#ffffff10;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing:antialiased;
+    padding:28px 20px 60px;
+  }
+  .mono{ font-family:"IBM Plex Mono", ui-monospace, "SF Mono", Consolas, monospace; }
+
+  .wrap{ max-width:1180px; margin:0 auto; }
+
+  /* Header */
+  header{
+    display:flex; align-items:flex-end; justify-content:space-between;
+    gap:20px; flex-wrap:wrap;
+    padding-bottom:20px; margin-bottom:20px;
+    border-bottom:1px solid var(--border);
+  }
+  .brand-mark{
+    display:flex; align-items:center; gap:14px;
+  }
+  .brand-icon{
+    width:42px; height:42px; border-radius:10px;
+    background:linear-gradient(160deg, var(--accent), var(--safe));
+    display:flex; align-items:center; justify-content:center;
+    flex-shrink:0;
+  }
+  .brand-icon svg{ width:22px; height:22px; }
+  h1{
+    font-size:1.5rem; font-weight:700; margin:0; letter-spacing:-0.01em;
+  }
+  .subhead{ color:var(--text-muted); font-size:0.88rem; margin-top:3px; max-width:46ch; line-height:1.4; }
+
+  .status-cluster{ display:flex; align-items:center; gap:18px; }
+  .status-pill{
+    display:flex; align-items:center; gap:7px;
+    font-family:"IBM Plex Mono", monospace; font-size:0.78rem;
+    padding:6px 12px; border-radius:100px; border:1px solid var(--border);
+    background:var(--panel-alt); color:var(--text-muted);
+  }
+  .dot{ width:7px; height:7px; border-radius:50%; background:var(--safe); flex-shrink:0; }
+  .dot.pulse{ animation:pulse 2s infinite; }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:0.35;} }
+  .clock{ font-family:"IBM Plex Mono", monospace; font-size:0.82rem; color:var(--text-muted); min-width:78px; text-align:right; }
+
+  /* Stat strip */
+  .stats{
+    display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:22px;
+  }
+  .stat-card{
+    background:var(--panel); border:1px solid var(--border); border-radius:12px;
+    padding:16px 18px;
+  }
+  .stat-label{ font-size:0.74rem; color:var(--text-muted); margin-bottom:8px; }
+  .stat-value{ font-family:"IBM Plex Mono", monospace; font-size:1.7rem; font-weight:600; line-height:1; }
+  .stat-value.safe{ color:var(--safe); }
+  .stat-value.warn{ color:var(--warn); }
+  .stat-value.critical{ color:var(--critical); }
+  .stat-sub{ font-size:0.72rem; color:var(--text-muted); margin-top:6px; }
+
+  /* Grid */
+  .grid2{
+    display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;
+  }
+  .panel{
+    background:var(--panel); border:1px solid var(--border); border-radius:12px;
+    padding:18px 20px; min-width:0;
+  }
+  .panel-head{
+    display:flex; align-items:baseline; justify-content:space-between; margin-bottom:14px;
+  }
+  .panel-title{ font-weight:600; font-size:0.98rem; }
+  .panel-note{ font-size:0.74rem; color:var(--text-muted); }
+
+  /* Topology */
+  .topo-svg{ width:100%; height:260px; display:block; }
+  .topo-node-label{ font-family:"IBM Plex Mono", monospace; font-size:9px; fill:var(--text-muted); }
+  .legend-row{ display:flex; gap:16px; margin-top:10px; flex-wrap:wrap; }
+  .legend-item{ display:flex; align-items:center; gap:6px; font-size:0.72rem; color:var(--text-muted); }
+  .legend-swatch{ width:9px; height:9px; border-radius:50%; }
+
+  /* Traffic chart */
+  .traffic-svg{ width:100%; height:200px; display:block; }
+  .traffic-meta{ display:flex; justify-content:space-between; margin-top:10px; }
+  .traffic-meta span{ font-family:"IBM Plex Mono", monospace; font-size:0.72rem; color:var(--text-muted); }
+
+  /* Device table */
+  table{ width:100%; border-collapse:collapse; font-size:0.84rem; }
+  th{
+    text-align:left; font-weight:500; color:var(--text-muted); font-size:0.72rem;
+    padding:0 8px 8px; border-bottom:1px solid var(--border);
+  }
+  td{ padding:9px 8px; border-bottom:1px solid var(--grid-line); vertical-align:middle; }
+  tr:last-child td{ border-bottom:none; }
+  .dev-cell{ display:flex; align-items:center; gap:9px; }
+  .dev-badge{
+    width:28px; height:28px; border-radius:7px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    font-family:"IBM Plex Mono", monospace; font-size:0.65rem; font-weight:600;
+    background:var(--panel-alt); color:var(--text-muted); border:1px solid var(--border);
+  }
+  .dev-name{ font-weight:500; }
+  .dev-ip{ font-family:"IBM Plex Mono", monospace; font-size:0.76rem; color:var(--text-muted); }
+  .badge{
+    display:inline-flex; align-items:center; gap:5px;
+    font-size:0.72rem; padding:3px 9px; border-radius:100px; font-weight:500;
+  }
+  .badge.normal{ background:var(--safe-soft); color:var(--safe); }
+  .badge.suspicious{ background:var(--warn-soft); color:var(--warn); }
+  .badge.blocked{ background:var(--critical-soft); color:var(--critical); }
+  .btn{
+    font-family:"IBM Plex Sans", sans-serif; font-size:0.76rem; font-weight:500;
+    padding:6px 12px; border-radius:7px; border:1px solid var(--border);
+    background:var(--panel-alt); color:var(--text); cursor:pointer;
+    transition:background 0.15s, border-color 0.15s;
+  }
+  .btn:hover{ border-color:var(--accent); }
+  .btn.danger{ color:var(--critical); }
+  .btn.primary{ background:var(--accent); color:#06262A; border-color:var(--accent); font-weight:600; }
+  .btn.primary:hover{ opacity:0.9; }
+  .btn:focus-visible, select:focus-visible, input:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+
+  /* Alert log */
+  .alert-log{ max-height:290px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding-right:2px; }
+  .alert-row{
+    display:flex; gap:10px; padding:9px 10px; border-radius:8px; background:var(--panel-alt);
+    border-left:3px solid var(--border); align-items:flex-start;
+  }
+  .alert-row.warn{ border-left-color:var(--warn); }
+  .alert-row.critical{ border-left-color:var(--critical); }
+  .alert-row.safe{ border-left-color:var(--safe); }
+  .alert-time{ font-family:"IBM Plex Mono", monospace; font-size:0.7rem; color:var(--text-muted); white-space:nowrap; padding-top:1px; }
+  .alert-text{ font-size:0.8rem; line-height:1.4; }
+  .alert-sev{ font-size:0.68rem; text-transform:none; color:var(--text-muted); display:block; margin-top:2px; }
+
+  /* Control panel */
+  .controls{
+    display:flex; align-items:center; gap:28px; flex-wrap:wrap;
+  }
+  .control-group{ display:flex; flex-direction:column; gap:8px; min-width:200px; }
+  .control-label{ font-size:0.78rem; color:var(--text-muted); }
+  .sensitivity-row{ display:flex; align-items:center; gap:10px; }
+  input[type="range"]{ flex:1; accent-color:var(--accent); }
+  .sensitivity-value{ font-family:"IBM Plex Mono", monospace; font-size:0.78rem; width:56px; text-align:right; }
+  .control-actions{ display:flex; gap:10px; margin-left:auto; }
+
+  footer{
+    margin-top:22px; padding-top:18px; border-top:1px solid var(--border);
+    color:var(--text-muted); font-size:0.78rem; line-height:1.6;
+  }
+  footer strong{ color:var(--text); }
+
+  @media (max-width: 860px){
+    .stats{ grid-template-columns:repeat(2,1fr); }
+    .grid2{ grid-template-columns:1fr; }
+    .status-cluster{ width:100%; justify-content:space-between; }
+    .control-actions{ margin-left:0; width:100%; }
+  }
+
+  .alert-log::-webkit-scrollbar{ width:6px; }
+  .alert-log::-webkit-scrollbar-thumb{ background:var(--border); border-radius:10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand-mark">
+      <div class="brand-icon">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2L4 5v6c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V5l-8-3z" fill="#06262A"/>
+          <path d="M9 12l2 2 4-4" stroke="#3BC9DB" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div>
+        <h1>NetSentry</h1>
+        <div class="subhead">Monitoring and control system for network security based on IoT technologies — interactive prototype with simulated traffic and threat data.</div>
+      </div>
+    </div>
+    <div class="status-cluster">
+      <div class="status-pill"><span class="dot pulse" id="systemDot"></span><span id="systemStatusText">MONITORING ACTIVE</span></div>
+      <div class="clock mono" id="clock">--:--:--</div>
+    </div>
+  </header>
+
+  <section class="stats">
+    <div class="stat-card">
+      <div class="stat-label">Connected devices</div>
+      <div class="stat-value" id="statDevices">—</div>
+      <div class="stat-sub" id="statDevicesSub">across the local IoT segment</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Active threats</div>
+      <div class="stat-value" id="statThreats">0</div>
+      <div class="stat-sub">flagged in the last session</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Network health score</div>
+      <div class="stat-value safe" id="statHealth">100</div>
+      <div class="stat-sub">based on device state &amp; alert severity</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Throughput</div>
+      <div class="stat-value" id="statThroughput">—</div>
+      <div class="stat-sub">packets / second, gateway uplink</div>
+    </div>
+  </section>
+
+  <section class="grid2">
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">Network topology</div>
+        <div class="panel-note">gateway &amp; connected nodes</div>
+      </div>
+      <svg class="topo-svg" id="topoSvg" viewBox="0 0 460 260"></svg>
+      <div class="legend-row">
+        <div class="legend-item"><span class="legend-swatch" style="background:var(--safe)"></span>Normal</div>
+        <div class="legend-item"><span class="legend-swatch" style="background:var(--warn)"></span>Suspicious</div>
+        <div class="legend-item"><span class="legend-swatch" style="background:var(--critical)"></span>Blocked</div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">Live traffic</div>
+        <div class="panel-note">last 40 samples</div>
+      </div>
+      <svg class="traffic-svg" id="trafficSvg" viewBox="0 0 460 200"></svg>
+      <div class="traffic-meta">
+        <span id="trafficNow">0 pkt/s</span>
+        <span id="trafficPeak">peak 0 pkt/s</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="grid2">
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">Device registry</div>
+        <div class="panel-note" id="deviceCountNote">0 devices</div>
+      </div>
+      <table>
+        <thead>
+          <tr><th>Device</th><th>IP address</th><th>Status</th><th></th></tr>
+        </thead>
+        <tbody id="deviceTableBody"></tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">Security alert log</div>
+        <div class="panel-note">most recent first</div>
+      </div>
+      <div class="alert-log" id="alertLog"></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <div class="panel-title">Detection controls</div>
+      <div class="panel-note">adjust sensitivity or run a scenario</div>
+    </div>
+    <div class="controls">
+      <div class="control-group">
+        <div class="control-label">Detection sensitivity</div>
+        <div class="sensitivity-row">
+          <input type="range" id="sensitivitySlider" min="0" max="2" step="1" value="1">
+          <span class="sensitivity-value mono" id="sensitivityLabel">Medium</span>
+        </div>
+      </div>
+      <div class="control-actions">
+        <button class="btn danger" id="simulateBtn">Simulate intrusion</button>
+        <button class="btn" id="resetBtn">Reset system</button>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <strong>Prototype notes.</strong> This is a client-side simulation built for demonstration purposes: device states, traffic values and alerts are generated in the browser rather than read from real sensors. The intended architecture pairs lightweight agents on IoT endpoints (reporting packet rate, connection count and destination entropy) with a central gateway that scores each device against a rolling baseline; readings above the sensitivity threshold raise an alert and can trigger automatic quarantine. The "Simulate intrusion" control stands in for that scoring pipeline so the detection and response flow can be reviewed without live hardware.
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- State ----------
+  var deviceTypes = [
+    {code:"GW", name:"Gateway Router", ip:"192.168.1.1"},
+    {code:"CAM", name:"Entrance Camera", ip:"192.168.1.14"},
+    {code:"THM", name:"Smart Thermostat", ip:"192.168.1.22"},
+    {code:"LCK", name:"Smart Door Lock", ip:"192.168.1.31"},
+    {code:"SNS", name:"Motion Sensor", ip:"192.168.1.37"},
+    {code:"PLG", name:"Smart Plug", ip:"192.168.1.42"},
+    {code:"CAM", name:"Garage Camera", ip:"192.168.1.48"},
+    {code:"HUB", name:"Sensor Hub", ip:"192.168.1.55"}
+  ];
+
+  var devices = deviceTypes.map(function(d, i){
+    return {
+      id: i,
+      code: d.code,
+      name: d.name,
+      ip: d.ip,
+      isGateway: d.code === "GW",
+      status: "normal" // normal | suspicious | blocked
+    };
+  });
+
+  var sensitivityLabels = ["Low", "Medium", "High"];
+  var sensitivity = 1;
+  var health = 100;
+  var threatCount = 0;
+  var attackTicksRemaining = 0;
+  var attackTargetId = null;
+  var trafficHistory = [];
+  var maxHistory = 40;
+  var baselineTraffic = 140;
+  var peakTraffic = 0;
+
+  // ---------- Helpers ----------
+  function pad(n){ return n < 10 ? "0" + n : "" + n; }
+  function nowTime(){
+    var d = new Date();
+    return pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+  }
+  function statusColorVar(status){
+    if (status === "suspicious") return "var(--warn)";
+    if (status === "blocked") return "var(--critical)";
+    return "var(--safe)";
+  }
+
+  // ---------- Clock ----------
+  function tickClock(){
+    document.getElementById("clock").textContent = nowTime();
+  }
+
+  // ---------- Alerts ----------
+  var alertLogEl = document.getElementById("alertLog");
+  function pushAlert(text, severity){
+    var row = document.createElement("div");
+    row.className = "alert-row " + severity;
+    var sevLabel = severity === "critical" ? "Critical" : severity === "warn" ? "Warning" : "Info";
+    row.innerHTML =
+      '<span class="alert-time mono">' + nowTime() + '</span>' +
+      '<span class="alert-text">' + text + '<span class="alert-sev">' + sevLabel + '</span></span>';
+    alertLogEl.insertBefore(row, alertLogEl.firstChild);
+    while (alertLogEl.children.length > 40){
+      alertLogEl.removeChild(alertLogEl.lastChild);
+    }
+  }
+
+  // ---------- Device table ----------
+  var tableBody = document.getElementById("deviceTableBody");
+  function renderDevices(){
+    tableBody.innerHTML = "";
+    devices.filter(function(d){ return !d.isGateway; }).forEach(function(d){
+      var tr = document.createElement("tr");
+
+      var tdDev = document.createElement("td");
+      tdDev.innerHTML =
+        '<div class="dev-cell">' +
+          '<div class="dev-badge">' + d.code + '</div>' +
+          '<div><div class="dev-name">' + d.name + '</div></div>' +
+        '</div>';
+
+      var tdIp = document.createElement("td");
+      tdIp.innerHTML = '<span class="dev-ip">' + d.ip + '</span>';
+
+      var tdStatus = document.createElement("td");
+      tdStatus.innerHTML = '<span class="badge ' + d.status + '">' + d.status + '</span>';
+
+      var tdAction = document.createElement("td");
+      var btn = document.createElement("button");
+      btn.className = "btn" + (d.status === "blocked" ? "" : " danger");
+      btn.textContent = d.status === "blocked" ? "Unblock" : "Block";
+      btn.addEventListener("click", function(){
+        if (d.status === "blocked"){
+          d.status = "normal";
+          pushAlert("Operator restored access for <strong>" + d.name + "</strong> (" + d.ip + ").", "safe");
+        } else {
+          d.status = "blocked";
+          pushAlert("Operator manually blocked <strong>" + d.name + "</strong> (" + d.ip + ").", "warn");
+        }
+        renderDevices();
+        renderTopology();
+        recomputeHealth();
+      });
+      tdAction.appendChild(btn);
+
+      tr.appendChild(tdDev);
+      tr.appendChild(tdIp);
+      tr.appendChild(tdStatus);
+      tr.appendChild(tdAction);
+      tableBody.appendChild(tr);
+    });
+
+    document.getElementById("statDevices").textContent = devices.length;
+    document.getElementById("deviceCountNote").textContent = devices.length + " devices";
+  }
+
+  // ---------- Topology ----------
+  var topoSvg = document.getElementById("topoSvg");
+  function renderTopology(){
+    var w = 460, h = 260, cx = w/2, cy = h/2 + 6;
+    var gw = devices[0];
+    var nodes = devices.slice(1);
+    var radius = 96;
+    var svgParts = [];
+
+    // spokes first (so nodes draw on top)
+    nodes.forEach(function(d, i){
+      var angle = (i / nodes.length) * Math.PI * 2 - Math.PI/2;
+      var x = cx + radius * Math.cos(angle);
+      var y = cy + radius * Math.sin(angle);
+      d._x = x; d._y = y;
+      var strokeColor = d.status === "normal" ? "var(--border)" : statusColorVar(d.status);
+      var dash = d.status === "blocked" ? '4,3' : 'none';
+      svgParts.push('<line x1="' + cx + '" y1="' + cy + '" x2="' + x + '" y2="' + y + '" stroke="' + strokeColor + '" stroke-width="1.4" stroke-dasharray="' + dash + '" opacity="0.85"/>');
+    });
+
+    // gateway node
+    svgParts.push('<circle cx="' + cx + '" cy="' + cy + '" r="20" fill="var(--accent)" opacity="0.16"/>');
+    svgParts.push('<circle cx="' + cx + '" cy="' + cy + '" r="12" fill="var(--accent)"/>');
+    svgParts.push('<text x="' + cx + '" y="' + (cy + 34) + '" text-anchor="middle" class="topo-node-label">GATEWAY</text>');
+
+    // device nodes
+    nodes.forEach(function(d){
+      var color = statusColorVar(d.status);
+      svgParts.push('<circle cx="' + d._x + '" cy="' + d._y + '" r="15" fill="' + color + '" opacity="0.18"/>');
+      svgParts.push('<circle cx="' + d._x + '" cy="' + d._y + '" r="8" fill="' + color + '"><title>' + d.name + ' — ' + d.status + '</title></circle>');
+      var labelY = d._y > cy ? d._y + 20 : d._y - 14;
+      svgParts.push('<text x="' + d._x + '" y="' + labelY + '" text-anchor="middle" class="topo-node-label">' + d.code + '</text>');
+    });
+
+    topoSvg.innerHTML = svgParts.join("");
+  }
+
+  // ---------- Traffic chart ----------
+  var trafficSvg = document.getElementById("trafficSvg");
+  for (var i = 0; i < maxHistory; i++){ trafficHistory.push(baselineTraffic); }
+
+  function renderTraffic(){
+    var w = 460, h = 200, padTop = 14, padBottom = 20;
+    var maxVal = Math.max.apply(null, trafficHistory) * 1.15;
+    maxVal = Math.max(maxVal, 60);
+    var stepX = w / (maxHistory - 1);
+
+    function yFor(v){
+      return padTop + (1 - v / maxVal) * (h - padTop - padBottom);
+    }
+
+    var points = trafficHistory.map(function(v, i){
+      return (i * stepX).toFixed(1) + "," + yFor(v).toFixed(1);
+    }).join(" ");
+
+    var areaPoints = points + " " + (w) + "," + (h - padBottom) + " 0," + (h - padBottom);
+
+    var gridLines = "";
+    for (var g = 1; g <= 3; g++){
+      var gy = padTop + (g / 4) * (h - padTop - padBottom);
+      gridLines += '<line x1="0" y1="' + gy.toFixed(1) + '" x2="' + w + '" y2="' + gy.toFixed(1) + '" stroke="var(--grid-line)" stroke-width="1"/>';
+    }
+
+    var svg =
+      '<defs><linearGradient id="trafficFill" x1="0" y1="0" x2="0" y2="1">' +
+        '<stop offset="0%" stop-color="var(--accent)" stop-opacity="0.35"/>' +
+        '<stop offset="100%" stop-color="var(--accent)" stop-opacity="0.02"/>' +
+      '</linearGradient></defs>' +
+      gridLines +
+      '<polygon points="' + areaPoints + '" fill="url(#trafficFill)" stroke="none"/>' +
+      '<polyline points="' + points + '" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+
+    trafficSvg.innerHTML = svg;
+
+    var current = trafficHistory[trafficHistory.length - 1];
+    peakTraffic = Math.max(peakTraffic, current);
+    document.getElementById("trafficNow").textContent = Math.round(current) + " pkt/s";
+    document.getElementById("trafficPeak").textContent = "peak " + Math.round(peakTraffic) + " pkt/s";
+    document.getElementById("statThroughput").textContent = Math.round(current);
+  }
+
+  // ---------- Health score ----------
+  function recomputeHealth(){
+    var suspicious = devices.filter(function(d){ return d.status === "suspicious"; }).length;
+    var blocked = devices.filter(function(d){ return d.status === "blocked"; }).length;
+    var score = 100 - suspicious * 12 - blocked * 6;
+    score = Math.max(0, Math.min(100, score));
+    health = score;
+    var el = document.getElementById("statHealth");
+    el.textContent = score;
+    el.className = "stat-value " + (score >= 80 ? "safe" : score >= 50 ? "warn" : "critical");
+    document.getElementById("statThreats").textContent = threatCount;
+
+    var dot = document.getElementById("systemDot");
+    var label = document.getElementById("systemStatusText");
+    if (score >= 80){
+      dot.style.background = "var(--safe)";
+      label.textContent = "MONITORING ACTIVE";
+    } else if (score >= 50){
+      dot.style.background = "var(--warn)";
+      label.textContent = "ELEVATED RISK";
+    } else {
+      dot.style.background = "var(--critical)";
+      label.textContent = "INTRUSION DETECTED";
+    }
+  }
+
+  // ---------- Simulation tick ----------
+  function tick(){
+    var next;
+    if (attackTicksRemaining > 0){
+      next = baselineTraffic + 260 + Math.random() * 140;
+      attackTicksRemaining--;
+      if (attackTicksRemaining === 0 && attackTargetId !== null){
+        var target = devices.find(function(d){ return d.id === attackTargetId; });
+        if (target && target.status === "suspicious"){
+          pushAlert("Traffic from <strong>" + target.name + "</strong> has returned to baseline; status remains flagged pending review.", "warn");
+        }
+      }
+    } else {
+      var drift = (Math.random() - 0.5) * 30;
+      next = Math.max(40, baselineTraffic + drift + Math.sin(Date.now()/9000) * 20);
+    }
+    trafficHistory.push(next);
+    if (trafficHistory.length > maxHistory) trafficHistory.shift();
+    renderTraffic();
+  }
+
+  // ---------- Simulate intrusion ----------
+  function simulateIntrusion(){
+    var candidates = devices.filter(function(d){ return !d.isGateway && d.status === "normal"; });
+    if (candidates.length === 0){
+      pushAlert("No unaffected devices remain to simulate against — reset the system first.", "warn");
+      return;
+    }
+    var target = candidates[Math.floor(Math.random() * candidates.length)];
+    target.status = "suspicious";
+    attackTargetId = target.id;
+    attackTicksRemaining = sensitivity === 0 ? 10 : sensitivity === 1 ? 7 : 4;
+    threatCount++;
+
+    pushAlert("Anomalous traffic spike detected from <strong>" + target.name + "</strong> (" + target.ip + ") — deviates from baseline by over 200%.", "critical");
+    if (sensitivity === 2){
+      window.setTimeout(function(){
+        target.status = "blocked";
+        pushAlert("High sensitivity policy auto-quarantined <strong>" + target.name + "</strong> pending investigation.", "critical");
+        renderDevices();
+        renderTopology();
+        recomputeHealth();
+      }, 1400);
+    }
+
+    renderDevices();
+    renderTopology();
+    recomputeHealth();
+  }
+
+  function resetSystem(){
+    devices.forEach(function(d){ d.status = "normal"; });
+    threatCount = 0;
+    attackTicksRemaining = 0;
+    attackTargetId = null;
+    peakTraffic = 0;
+    trafficHistory = [];
+    for (var i = 0; i < maxHistory; i++){ trafficHistory.push(baselineTraffic); }
+    pushAlert("System reset — all devices restored to normal, alert counters cleared.", "safe");
+    renderDevices();
+    renderTopology();
+    renderTraffic();
+    recomputeHealth();
+  }
+
+  // ---------- Wire up controls ----------
+  var slider = document.getElementById("sensitivitySlider");
+  var sensitivityLabelEl = document.getElementById("sensitivityLabel");
+  slider.addEventListener("input", function(){
+    sensitivity = parseInt(slider.value, 10);
+    sensitivityLabelEl.textContent = sensitivityLabels[sensitivity];
+  });
+
+  document.getElementById("simulateBtn").addEventListener("click", simulateIntrusion);
+  document.getElementById("resetBtn").addEventListener("click", resetSystem);
+
+  // ---------- Init ----------
+  renderDevices();
+  renderTopology();
+  renderTraffic();
+  recomputeHealth();
+  pushAlert("System initialized — baseline established for " + (devices.length - 1) + " IoT endpoints.", "safe");
+  tickClock();
+  setInterval(tickClock, 1000);
+  setInterval(tick, 1500);
+
+
+  // --------- Event Source ---------
+  const eventSource = new EventSource("http://localhost:3000/sse");
+  console.log("SSE connection established. eventSource.readyState:", eventSource.readyState);
+  eventSource.onmessage = (event) => {
+    console.log("Received SSE message:", event.data);
+  }
+
+})();
+</script>
+</body>
+</html>
