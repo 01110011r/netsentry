@@ -79,3 +79,4 @@ src/
 - [x] Anomaly detection (baseline + threshold, `detect.c`)
 - [x] Active response via nftables (`control.c`)
 - [x] Alert/report output for the dashboard prototype
+- [x] Dashboard prototype (HTML/JS served by a simple HTTP server)
