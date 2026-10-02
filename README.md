@@ -5,6 +5,28 @@ Single-threaded IDS/IPS engine in C: captures traffic, tracks per-host
 behavior in a sliding window, detects anomalies, and (eventually) blocks
 offending hosts via nftables.
 
+```mermaid
+flowchart LR
+    subgraph CORE["netsentry — C core (single flow)"]
+        direction LR
+        CAP["<b>capture</b><br/>Catch packets<br/>and analyze"]
+        FT["<b>flowtrack</b><br/>Sliding window<br/>(host based)"]
+        DET["<b>detect</b><br/>EWMA baseline<br/>+ z-score"]
+        CTRL["<b>control</b><br/>blocking<br/>decision"]
+        REP["<b>report</b><br/>JSON Lines<br/>journal lines"]
+        CAP --> FT --> DET --> CTRL --> REP
+    end
+
+    IFACE[("Net<br/>interface")] --> CAP
+    CTRL -. "nft add element" .-> NFT[["nftables<br/>(NetFilter)"]]
+    REP --> LOG[("netsentry_report.json")]
+
+    classDef module fill:#EEF1F6,stroke:#5B6478,stroke-width:1px,color:#1A2233;
+    classDef ext fill:#D9E2F3,stroke:#2F5496,stroke-width:1px,color:#1A2233;
+    class CAP,FT,DET,CTRL,REP module;
+    class IFACE,NFT,LOG ext;
+```
+
 ## Build
 
 ```sh
