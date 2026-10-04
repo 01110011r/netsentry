@@ -74,11 +74,13 @@ Loopback traffic is enough to sanity-check the whole pipeline:
 
 ```sh
 # terminal 1
-sudo ./netsentry lo
+sudo ./netsentry lo low|medium|high
 
 # terminal 2 — generate some traffic
 ping -c 3 127.0.0.1
 curl -m 1 http://127.0.0.1:9/     # port 9 is closed -> triggers a TCP SYN + RST
+# simulate burst traffic from a single source IP
+for i in $(seq 1 200); do ping -c 1 -W 1 127.0.0.1 > /dev/null; done
 ```
 
 You should see parsed packet lines in terminal 1, including the running

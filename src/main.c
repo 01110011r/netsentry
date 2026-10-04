@@ -10,6 +10,7 @@
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define WINDOW_SECS 60
 
@@ -128,7 +129,7 @@ static void handle_sigint(int signum) {
 }
 
 int main(int argc, char **argv) {
-  if (argc != 2) {
+  if (argc < 2) {
     fprintf(stderr, "usage: %s <interface>\n", argv[0]);
     fprintf(stderr, "       try: %s any    (capture on all interfaces)\n",
             argv[0]);
@@ -160,9 +161,25 @@ int main(int argc, char **argv) {
     return EXIT_FAILURE;
   }
 
+  sensitivity_t sens = SENS_MEDIUM;
+  if (argc >= 3) {
+    if (strcmp(argv[2], "low") == 0)
+      sens = SENS_LOW;
+    else if (strcmp(argv[2], "high") == 0)
+      sens = SENS_HIGH;
+    else if (strcmp(argv[2], "medium") != 0) {
+      fprintf(stderr,
+              "invalid sensitivity '%s' - must be low, medium, or high\n",
+              argv[2]);
+      control_teardown();
+      capture_close();
+      return EXIT_FAILURE;
+    }
+  }
+
   app_ctx_t ctx = {0};
   ctx.ft = flowtrack_create(WINDOW_SECS);
-  ctx.detector = detect_create(SENS_MEDIUM, WINDOW_SECS);
+  ctx.detector = detect_create(sens, WINDOW_SECS);
   ctx.secs_until_detect = WINDOW_SECS;
 
   if (!ctx.ft || !ctx.detector) {
